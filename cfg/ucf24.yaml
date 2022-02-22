@@ -1,5 +1,5 @@
 TRAIN:
-  RESUME_PATH: "/usr/home/sut/YOWO/backup/ucf24/yowo_ucf24_16f_best_08181.pth"
+  RESUME_PATH: "/dataset/YSTData/015_action_recg/YOWO_weights/yowo_ucf101-24_16f_best_fmap_08749.pth"
   DATASET: ucf24  # `ava`, `ucf24` or `jhmdb21`
   BATCH_SIZE: 10
   TOTAL_BATCH_SIZE: 128
@@ -32,15 +32,15 @@ MODEL:
   BACKBONE_3D: resnext101
   BACKBONE_2D: darknet
 WEIGHTS:
-  BACKBONE_3D: "weights/resnext-101-kinetics.pth"
-  BACKBONE_2D: "weights/yolo.weights"
+  BACKBONE_3D: "/dataset/YSTData/015_action_recg/YOWO_weights/resnext-101-kinetics.pth"
+  BACKBONE_2D: "/dataset/YSTData/015_action_recg/YOWO_weights/yolo.weights"
   FREEZE_BACKBONE_3D: False
   FREEZE_BACKBONE_2D: False
 LISTDATA:
-  BASE_PTH: "/usr/home/sut/datasets/ucf24"
-  TRAIN_FILE: "/usr/home/sut/datasets/ucf24/trainlist.txt"
-  TEST_FILE: "/usr/home/sut/datasets/ucf24/testlist.txt"
-  TEST_VIDEO_FILE: "/usr/home/sut/datasets/ucf24/testlist_video.txt"
+  BASE_PTH: "/dataset/YSTData/015_action_recg/ucf24"
+  TRAIN_FILE: "/dataset/YSTData/015_action_recg/ucf24/trainlist.txt"
+  TEST_FILE: "/dataset/YSTData/015_action_recg/ucf24/testlist.txt"
+  TEST_VIDEO_FILE: "/dataset/YSTData/015_action_recg/ucf24/testlist_video.txt"
   MAX_OBJS: 6
   CLASS_NAMES: [
     "Basketball", "BasketballDunk", "Biking", "CliffDiving", "CricketBowling", 

@@ -1,6 +1,7 @@
 import os
 import glob
 import numpy as np
+import pickle
 
 import torch
 import torch.nn as nn
@@ -19,6 +20,8 @@ from core.eval_results import *
 # ---------------------------------------------------------------
 args  = parser.parse_args()
 cfg   = parser.load_config(args)
+print(args)
+print(cfg)
 
 dataset = cfg.TRAIN.DATASET
 assert dataset == 'ucf24' or dataset == 'jhmdb21', 'invalid dataset'
@@ -194,42 +197,52 @@ def video_mAP_ucf():
             v_annotation['tubes'] = np.array(all_gt_boxes)
             gt_videos[video_name] = v_annotation
 
-    for line in lines:
-        print(line)
-        line = line.rstrip()
-        test_loader = torch.utils.data.DataLoader(
-                          testData(os.path.join(base_path, 'rgb-images', line),
-                          shape=(224, 224), transform=transforms.Compose([
-                          transforms.ToTensor()]), clip_duration=clip_duration, sampling_rate=sampling_rate),
-                          batch_size=64, shuffle=False, num_workers= 8, pin_memory= True)
+    det_result_file = "../yowo_runs/det_result.pkl"
+    if os.path.exists(det_result_file):
+        # 加载之前的检测结果
+        print("loading det result from: ", det_result_file)
+        with open(det_result_file,'rb') as fp:
+            detected_boxes = pickle.load(fp)
+    else:
+        print("deting all videos")
+        for line in lines:
+            print(line)
+            line = line.rstrip()
+            test_loader = torch.utils.data.DataLoader(
+                            testData(os.path.join(base_path, 'rgb-images', line),
+                            shape=(224, 224), transform=transforms.Compose([
+                            transforms.ToTensor()]), clip_duration=clip_duration, sampling_rate=sampling_rate),
+                            batch_size=4, shuffle=False, num_workers= 8, pin_memory= True)
 
-        for batch_idx, (data, target, img_name) in enumerate(test_loader):
-            data = data.cuda()
-            with torch.no_grad():
-                data = Variable(data)
-                output = model(data).data
+            for batch_idx, (data, target, img_name) in enumerate(test_loader):
+                data = data.cuda()
+                with torch.no_grad():
+                    data = Variable(data)
+                    output = model(data).data
 
-                all_boxes = get_region_boxes_video(output, conf_thresh, num_classes, anchors, num_anchors, 0, 1)
-                for i in range(output.size(0)):
-                    boxes = all_boxes[i]
-                    boxes = nms(boxes, nms_thresh)
-                    n_boxes = len(boxes)
+                    all_boxes = get_region_boxes_video(output, conf_thresh, num_classes, anchors, num_anchors, 0, 1)
+                    for i in range(output.size(0)):
+                        boxes = all_boxes[i]
+                        boxes = nms(boxes, nms_thresh)
+                        n_boxes = len(boxes)
 
-                    # generate detected tubes for all classes
-                    # save format: {img_name: {cls_ind: array[[x1,y1,x2,y2, cls_score], [], ...]}}
-                    img_annotation = {}
-                    for cls_idx in range(num_classes):
-                        cls_idx += 1    # index begins from 1
-                        cls_boxes = np.zeros([n_boxes, 5], dtype=np.float32)
-                        for b in range(n_boxes):
-                            cls_boxes[b][0] = max(float(boxes[b][0]-boxes[b][2]/2.0) * 320.0, 0.0)
-                            cls_boxes[b][1] = max(float(boxes[b][1]-boxes[b][3]/2.0) * 240.0, 0.0)
-                            cls_boxes[b][2] = min(float(boxes[b][0]+boxes[b][2]/2.0) * 320.0, 320.0)
-                            cls_boxes[b][3] = min(float(boxes[b][1]+boxes[b][3]/2.0) * 240.0, 240.0)
-                            cls_boxes[b][4] = float(boxes[b][5+(cls_idx-1)*2])
-                        img_annotation[cls_idx] = cls_boxes
-                    detected_boxes[img_name[i]] = img_annotation
-
+                        # generate detected tubes for all classes
+                        # save format: {img_name: {cls_ind: array[[x1,y1,x2,y2, cls_score], [], ...]}}
+                        img_annotation = {}
+                        for cls_idx in range(num_classes):
+                            cls_idx += 1    # index begins from 1
+                            cls_boxes = np.zeros([n_boxes, 5], dtype=np.float32)
+                            for b in range(n_boxes):
+                                cls_boxes[b][0] = max(float(boxes[b][0]-boxes[b][2]/2.0) * 320.0, 0.0)
+                                cls_boxes[b][1] = max(float(boxes[b][1]-boxes[b][3]/2.0) * 240.0, 0.0)
+                                cls_boxes[b][2] = min(float(boxes[b][0]+boxes[b][2]/2.0) * 320.0, 320.0)
+                                cls_boxes[b][3] = min(float(boxes[b][1]+boxes[b][3]/2.0) * 240.0, 240.0)
+                                cls_boxes[b][4] = float(boxes[b][5+(cls_idx-1)*2])
+                            img_annotation[cls_idx] = cls_boxes
+                        detected_boxes[img_name[i]] = img_annotation
+        # 检测结果存文件
+        with open(det_result_file,'wb') as fp:
+            pickle.dump(detected_boxes, fp)
 
     iou_list = [0.05, 0.1, 0.2, 0.3, 0.5, 0.75]
     for iou_th in iou_list:
