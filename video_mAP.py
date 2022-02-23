@@ -41,29 +41,33 @@ conf_thresh   = 0.005
 nms_thresh    = 0.4
 eps           = 1e-5
 
+#YOWO模型跑测试集非常慢, 2*1080Ti用了4个小时. 把检测结果保存成文件, 有这个文件就不进行检测了
+det_result_file = os.path.join(base_path, "../YOWO_weights/det_result__all_video.pkl")
+# det_result_file = os.path.join(base_path, "../YOWO_weights/det_result__v_Basketball_g01_c01.pkl")
+if os.path.exists(det_result_file):
+    model = None
+else:
+    ####### Create model
+    # ---------------------------------------------------------------
+    model = YOWO(cfg)
+    model = model.cuda()
+    model = nn.DataParallel(model, device_ids=None) # in multi-gpu case
+    # print(model)
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logging('Total number of trainable parameters: {}'.format(pytorch_total_params))
 
 
-####### Create model
-# ---------------------------------------------------------------
-model = YOWO(cfg)
-model = model.cuda()
-model = nn.DataParallel(model, device_ids=None) # in multi-gpu case
-# print(model)
-pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-logging('Total number of trainable parameters: {}'.format(pytorch_total_params))
+    # Load resume path 
 
-
-# Load resume path 
-
-if cfg.TRAIN.RESUME_PATH:
-    print("===================================================================")
-    print('loading checkpoint {}'.format(cfg.TRAIN.RESUME_PATH))
-    checkpoint = torch.load(cfg.TRAIN.RESUME_PATH)
-    model.load_state_dict(checkpoint['state_dict'])
-    model.eval()
-    print("Model loaded!")
-    print("===================================================================")
-    del checkpoint
+    if cfg.TRAIN.RESUME_PATH:
+        print("===================================================================")
+        print('loading checkpoint {}'.format(cfg.TRAIN.RESUME_PATH))
+        checkpoint = torch.load(cfg.TRAIN.RESUME_PATH)
+        model.load_state_dict(checkpoint['state_dict'])
+        model.eval()
+        print("Model loaded!")
+        print("===================================================================")
+        del checkpoint
 
 
 def get_clip(root, imgpath, train_dur, sampling_rate, dataset):
@@ -198,10 +202,8 @@ def video_mAP_ucf():
             gt_videos[video_name] = v_annotation
 
     
-    det_result_file = os.path.join(base_path, "../YOWO_weights/det_result__all_video.pkl")
-    # det_result_file = os.path.join(base_path, "../YOWO_weights/det_result__v_Basketball_g01_c01.pkl")
     if os.path.exists(det_result_file):
-        # 加载之前的检测结果
+        # 加载保存好的检测结果
         print("loading det result from: ", det_result_file)
         with open(det_result_file,'rb') as fp:
             detected_boxes = pickle.load(fp)

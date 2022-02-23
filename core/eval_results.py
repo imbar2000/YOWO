@@ -2,6 +2,7 @@
 import numpy as np
 import os
 from core.utils import *
+import time
 
 def compute_score_one_class(bbox1, bbox2, w_iou=1.0, w_scores=1.0, w_scores_mul=0.5):
     # bbx: <x1> <y1> <x2> <y2> <class score>
@@ -53,7 +54,7 @@ def link_bbxes_between_frames(bbox_list, w_iou=1.0, w_scores=1.0, w_scores_mul=0
     edge_scores = [compute_score_one_class(detect[i], detect[i+1], w_iou=w_iou, w_scores=w_scores, w_scores_mul=w_scores_mul) for i in range(nframes-1)]
     copy_edge_scores = edge_scores
 
-    while not np.any(is_frame_empty):   # while( 所有帧都不为空 )
+    while not np.any(is_frame_empty):   # while( 所有帧都不为空 ). 因为有多个tube的情况, 所以这里需要循环
         # initialize
         scores = [np.zeros([d.shape[0],], dtype=np.float32) for d in detect]
         index = [np.nan*np.ones([d.shape[0],], dtype=np.float32) for d in detect]
@@ -72,7 +73,9 @@ def link_bbxes_between_frames(bbox_list, w_iou=1.0, w_scores=1.0, w_scores_mul=0
             idx[i+1] = index[i][idx[i]]     # 第i+1帧的最优顶点 = 第i帧 最优顶点(idx[i]) 的最大相邻顶点
 
         # 删除已经覆盖的boxes, 并且建立输出结构体
-        # 但个人感觉, 不需要删除
+        # 这里把已建立tube的所有顶点都删除了, 是不是有问题?
+        # 应该允许多个tube经过同一个中间顶点, 但不允许多个tube有一个起始顶点 
+        # 是不是应该只删除第0帧的, tube的顶点
         this = np.empty((nframes, 6), dtype=np.float32)
         this[:, 0] = 1 + np.arange(nframes)
         for i in range(nframes):
@@ -125,6 +128,13 @@ def link_video_one_class(vid_det, bNMS3d = True, gtlen=None):
 
     return vres
 
+def summary_videos(pred_videos):
+    cnt_video, cnt_frame, cnt_box = len(pred_videos), 0, 0
+    for v in pred_videos:
+        cnt_frame = cnt_frame + len(v[1])
+        for f in v[1]:
+            cnt_box = cnt_box + len(f[1])
+    return cnt_video, cnt_frame, cnt_box
 
 def video_ap_one_class(gt, pred_videos, iou_thresh = 0.2, bTemporal = False, gtlen = None):
     '''
@@ -133,6 +143,9 @@ def video_ap_one_class(gt, pred_videos, iou_thresh = 0.2, bTemporal = False, gtl
         gt里, 每个视频多个帧, 每帧只有一个box;
         pred_videos里, 帧数和gt一样, 但每帧里有多个框. 需要从每帧里找一个框,串起来,形成一条路径,是动态路径规划的问题. 用维特比算法来解
     '''
+
+    t0 = time.time()
+
     # link for prediction
     pred = []
     for pred_v in pred_videos:      # 遍历每个视频
@@ -142,6 +155,10 @@ def video_ap_one_class(gt, pred_videos, iou_thresh = 0.2, bTemporal = False, gtl
         pred_link_v = link_video_one_class(pred_v[1], bNMS3d=True, gtlen=gtlen)
         for tube in pred_link_v:
             pred.append((video_index, tube))
+
+    t1 = time.time()
+    cnt_video, cnt_frame, cnt_box = summary_videos(pred_videos)
+    print("        build tube: %f sec, cnt_video=%d, cnt_frame=%d, cnt_box=%d" % (t1-t0, cnt_video, cnt_frame, cnt_box))
 
     # pred的tube 按降序排序
     # sort tubes according to scores (descending order)
@@ -261,8 +278,12 @@ def evaluate_videoAP(gt_videos, all_boxes, CLASSES, iou_thresh = 0.2, bTemporal 
               910*24个目标框
                                     n个boxes
     """
+    t0 = time.time()
     gt_videos_format = gt_to_videts(gt_videos)
+    t1 = time.time()
     pred_videos_format = imagebox_to_videts(all_boxes, CLASSES)
+    t2 = time.time()
+    print("gt_to_videts: %f sec, imagebox_to_videts %f sec" % (t1-t0, t2-t1))
     ap_all = []    
     for cls_ind, cls in enumerate(CLASSES[0:]):                         # 遍历所有class
         print("    class: ", cls)
