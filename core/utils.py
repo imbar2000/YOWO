@@ -189,17 +189,22 @@ def overlap2d(b1, b2):
     return width*height
 
 def iou3d(b1, b2):
+    # b1 : array of [frame_index, x1, y1, x2, y2]
     assert b1.shape[0] == b2.shape[0]
     assert np.all(b1[:,0] == b2[:,0])
     o = overlap2d(b1[:,1:5],b2[:,1:5])
+    # mean(所有box交集面积 / 所有box并集面积)
     return np.mean( o/(area2d(b1[:,1:5])+area2d(b2[:,1:5])-o) )
 
 def iou3dt(b1, b2):
+    # b1 : array of [frame_index, x1, y1, x2, y2]
+    # 时间轴上相交[tmin, tmax]
     tmin = max(b1[0,0], b2[0,0])
     tmax = min(b1[-1,0], b2[-1,0])
     if tmax <= tmin: return 0.0    
-    temporal_inter = tmax-tmin+1
-    temporal_union = max(b1[-1,0], b2[-1,0]) - min(b1[0,0], b2[0,0]) + 1 
+    temporal_inter = tmax-tmin+1    #时间交集
+    temporal_union = max(b1[-1,0], b2[-1,0]) - min(b1[0,0], b2[0,0]) + 1    #时间并集
+    # iou3d * 时间交集 / 时间并集
     return iou3d( b1[np.where(b1[:,0]==tmin)[0][0]:np.where(b1[:,0]==tmax)[0][0]+1,:] , b2[np.where(b2[:,0]==tmin)[0][0]:np.where(b2[:,0]==tmax)[0][0]+1,:]  ) * temporal_inter / temporal_union
 
 def nms_3d(detections, overlap=0.5):

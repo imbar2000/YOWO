@@ -197,7 +197,9 @@ def video_mAP_ucf():
             v_annotation['tubes'] = np.array(all_gt_boxes)
             gt_videos[video_name] = v_annotation
 
-    det_result_file = "../yowo_runs/det_result.pkl"
+    
+    det_result_file = os.path.join(base_path, "../YOWO_weights/det_result__all_video.pkl")
+    # det_result_file = os.path.join(base_path, "../YOWO_weights/det_result__v_Basketball_g01_c01.pkl")
     if os.path.exists(det_result_file):
         # 加载之前的检测结果
         print("loading det result from: ", det_result_file)
@@ -218,16 +220,20 @@ def video_mAP_ucf():
                 data = data.cuda()
                 with torch.no_grad():
                     data = Variable(data)
-                    output = model(data).data
+                    output = model(data).data   #shape (batch, 145, 7, 7)
 
-                    all_boxes = get_region_boxes_video(output, conf_thresh, num_classes, anchors, num_anchors, 0, 1)
+                    # 解码成box, shape (batch, nbox, 53), 其中53=4(box)+1(objConf)+24*2
+                    all_boxes = get_region_boxes_video(output, conf_thresh, num_classes, anchors, num_anchors, 0, 1) 
                     for i in range(output.size(0)):
-                        boxes = all_boxes[i]
-                        boxes = nms(boxes, nms_thresh)
+                        boxes = all_boxes[i]                #boxes = 一帧里的目标
+                        boxes = nms(boxes, nms_thresh)      #nms
                         n_boxes = len(boxes)
 
                         # generate detected tubes for all classes
-                        # save format: {img_name: {cls_ind: array[[x1,y1,x2,y2, cls_score], [], ...]}}
+                        """
+                        保存格式:       {"Basketball/v_Basketball_g01_c01/00001.jpg": [[cls_1_data], [cls_1_data], ..., [cls_23_data]]}
+                                        cls_1_data格式: shape=(nbox, 5), 其中5 = 4(x1, y1, x2, y2) + 1(类别置信度)
+                        """
                         img_annotation = {}
                         for cls_idx in range(num_classes):
                             cls_idx += 1    # index begins from 1
@@ -240,6 +246,7 @@ def video_mAP_ucf():
                                 cls_boxes[b][4] = float(boxes[b][5+(cls_idx-1)*2])
                             img_annotation[cls_idx] = cls_boxes
                         detected_boxes[img_name[i]] = img_annotation
+            # break
         # 检测结果存文件
         with open(det_result_file,'wb') as fp:
             pickle.dump(detected_boxes, fp)
