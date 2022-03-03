@@ -276,7 +276,7 @@ def evaluate_videoAP(gt_videos, all_boxes, CLASSES, iou_thresh = 0.2, bTemporal 
         pred_videos_format : 每个视频,24个类别的目标框, len=910*24
             [ [cls_id, video_index, [frame_index, [x1, y1, x2, y2, cls_score]] ] ]
               910*24个目标框
-                                    n个boxes
+                                    n个frame
     """
     t0 = time.time()
     gt_videos_format = gt_to_videts(gt_videos)
