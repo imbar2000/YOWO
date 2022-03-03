@@ -39,7 +39,50 @@ TUBE_BOXES = 2
 
 def read_yolov5_result(result_dir):
     result = []
-    return result
+
+    files = os.listdir(result_dir) # 得到文件夹下的所有文件名称
+    print(files)
+
+    files.sort()
+    files.sort(key = lambda x:int(x[:-4])) # 文件名按数字排序
+    print(files)
+
+    CLASSES = ('cigarette', 'phone', 'other')
+    for i in range(len(CLASSES)):
+        print('class[%d] : ' %i, CLASSES[i])
+
+    box = np.zeros((1,5), dtype = float)
+
+    frame_data = []
+    count = 0 # 作为frame_id
+    for file in files: # 遍历文件夹
+        if not os.path.isdir(file): # 判断是否是文件夹，不是文件夹才打开
+            count = count + 1
+            data_index = 0
+            print('count = ', count)
+            with open(result_dir + '/' + file, "r") as f:  # 打开文件
+                file_data = f.readlines()
+                file_line_num = len(file_data)
+                print('file_line_num = ', file_line_num)
+                file_data_list = []
+                for no_line_data in file_data:
+                    no_line_data = no_line_data.strip('\n')  # 去掉列表中每一个元素的换行符
+                    data_list = no_line_data.split(' ') # 字符串转list
+                    data_list[0:7] = list(map(float, data_list[0:7])) # 字符转数字
+                    print('%s : ' %file, data_list)
+                    file_data_list.append(data_list)
+                    data_index = data_index + 1
+                boxes = np.zeros((file_line_num, 9))
+                for j in range(file_line_num):
+                    boxes[j,:4] = file_data_list[j][3:7]
+                    boxes[j,4:7] = file_data_list[j][0:3]
+                    boxes[j,7] = file_data_list[j][0:3].index(max(file_data_list[j][0:3]))
+                    boxes[j,8] = max(file_data_list[j][0:3])
+                print('boxes =', boxes)
+            frame_data.append([count, boxes])
+
+    # return result
+    return frame_data
 
 
 def build_yowo_class_result(det_result, cls):
@@ -134,7 +177,7 @@ def correct_yolov5_by_YOWO(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='parameters to train net')
-    parser.add_argument('--yolov5_result_dir', default="/mnt/data/wangpeng/plate/test_plate_recg_v3.0_crop", help='path to detect results of yolov5')
+    parser.add_argument('--yolov5_result_dir', default="/dataset/wanghaifeng/read-yolov5-txt/labels", help='path to detect results of yolov5')
     parser.add_argument('--output_dir', default="/mnt/data/wangpeng/plate/test_plate_recg_v3.0_crop", help='path to output results')
     parser.add_argument('--th_tube', default=0.3, type=float, help='threshod of tubes')
     parser.add_argument('--names', nargs='+', default=[], help='names of det result')
