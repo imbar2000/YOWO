@@ -13,16 +13,17 @@
 #                 class是类别
 #                 obj_score是class这个类别的分数. 也是三个分数里最高的那个
 #        tubes: 
-#           list[[ class, score, np.array[[frame_index, box_index]] ]]
-#           其中: frame_index 是det_result里的 帧下标
-#                 box_index 是det_result里的 box下标
+#           list[[ class, tube_score, np.array[[frame_id, x1, y1, x2, y2, cls_score]] ]]
 
 import os
 import glob
+from matplotlib.pyplot import box
 import numpy as np
 import pickle
 import argparse
+from core.eval_results import link_video_one_class
 
+CLASS_NUM = 3
 
 BOX_X1, BOX_Y1, BOX_X2, BOX_Y2 = 0, 1, 2, 3
 BOX_CLS0_SCORE = 4
@@ -40,42 +41,70 @@ def read_yolov5_result(result_dir):
     result = []
     return result
 
+
+def build_yowo_class_result(det_result, cls):
+    """
+    检测结果转成yolwo的单类别格式
+    返回: list[ [frame_index, np.array[[x1, y1, x2, y2, cls_score]] ] ]
+    """
+    yowo_cls_result = []
+    index = [0, 1, 2, 3, BOX_CLS0_SCORE+cls]
+    for fr in det_result:
+        yr = [fr[0], fr[1][index]]
+        yowo_cls_result.append(yr)
+    return yowo_cls_result
+
 def build_tubes(det_result, th_tube):
     """
     根据检测结果, 生成tubes
     det_result  :检测结果
     th_tube     :分数阈值, 分数>th_tube的tube才会被留下来
+    返回        :tubes, list[[ class, tube_score, np.array[[frame_id, x1, y1, x2, y2, cls_score]] ]]
     """
+    # 生成yowo格式tubes
     tubes = []
+    for k in range(CLASS_NUM):
+        yowo_cls_result = build_yowo_class_result(det_result, k)
+        pred_link_v = link_video_one_class(yowo_cls_result, bNMS3d=True, gtlen=None) 
+        video_index = 0
+        for tube in pred_link_v:
+            # video_index = video_index + 1
+            # pred.append((video_index, tube))
+            tube_scores = [np.mean(b[:, 5]) for b in tube]
+            if tube_scores > th_tube:
+                tubes.append([k, tube_scores, tube])
     return tubes
 
-def correct_yolov5(frm_result, frm_index, tubes):
+def find_box(frm_result, tube_box):
+    """
+    frm_result里查找tube_box对应的box下标
+    """
+    for i, b in enumerate(frm_result[FRM_BOXES]):
+        if tube_box[1:5] == b[:4]:      # x1,y1,x2,y2是否相等
+            return i
+    return -1
+
+def correct_yolov5(frm_result, tubes):
     """
     用tube更正一帧的检测结果
     frm_result 是一帧的检测结果, list[frame_id, np.array[[x1, y1, x2, y2, cls0_score, cls1_score, cls2_score, class, obj_score]] ]
+    tubes: list[[ class, tube_score, np.array[[frame_id, x1, y1, x2, y2, cls_score]] ]]
     """
-    correct_box = {}    #被修改的box,  box_index: [class]
+    correct_box = {}    #被修改的box,  box_index: np.array[[class, tube_score]]
     for t in tubes:
-        for f in t[TUBE_BOXES]:
-            f_index, b_index = f
-            if f_index == frm_index:
-                # boxs = frm_result[FRM_BOXES]
-                # boxs[b_index][BOX_CLSASS] = t[TUBE_CLASS]
-                correct_box.get(b_index, default=[]).append(t[TUBE_CLASS: TUBE_SCORE+1])
+        t_boxes = t[TUBE_BOXES][-1]     #仅使用tube的最后一个box
+        if t_boxes[0] == frm_result[FRM_INDEX]:
+            box_index = find_box(frm_result, t_boxes)
+            if box_index >= 0:
+                correct_box.get(box_index, default=[]).append(t[TUBE_CLASS: TUBE_SCORE+1])
                 break
     
-    for box_idx, t in correct_box.items():
+    for bi, t in correct_box.items():
         boxs = frm_result[FRM_BOXES]
         idx_tube = np.argmax(t, axis=1)
         cls = t[idx_tube][TUBE_CLASS]
-        boxs[box_idx][BOX_CLSASS] = cls
-        boxs[box_idx][BOX_OBJ_SCORE] = boxs[box_idx][BOX_CLS0_SCORE + cls]
-
-def write_map_result(filName, objects):
-    with open(filName, "w", encoding="utf-8") as fp:
-        for obj in objects:
-            x1, y1, x2, y2, _1, _2, _3, name, conf,  = obj
-            fp.write("%s %.12f %d %d %d %d\n" % (name, conf, int(x1), int(y1), int(x2), int(y2)))
+        boxs[bi][BOX_CLSASS] = cls
+        boxs[bi][BOX_OBJ_SCORE] = boxs[bi][BOX_CLS0_SCORE + cls]
 
 def save_mAP_result(det_result, output_dir, names):
     """
@@ -99,7 +128,7 @@ def correct_yolov5_by_YOWO(args):
     min_frms = args.start_index_frm
     for i in range(min_frms, len(det_result)):
         tubes = build_tubes(det_result[:i+1], args.th_tube)
-        correct_yolov5(det_result[i], i, tubes)
+        correct_yolov5(det_result[i], tubes)
 
     save_mAP_result(det_result, output_dir, args.names)
 

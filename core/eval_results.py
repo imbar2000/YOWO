@@ -22,7 +22,7 @@ def compute_score_one_class(bbox1, bbox2, w_iou=1.0, w_scores=1.0, w_scores_mul=
     return scores
 
 def link_bbxes_between_frames(bbox_list, w_iou=1.0, w_scores=1.0, w_scores_mul=0.5):
-    # bbox_list: 每帧的检测结果, [ [x1, y1, x2, y2, cls_score] ] , 注意每帧的box数都不一样
+    # bbox_list: 每帧的检测结果, list[ np.array[[x1, y1, x2, y2, cls_score]] ] , 注意每帧的box数都不一样
     # check no empty detections
     ind_notempty = []
     nfr = len(bbox_list)
@@ -103,9 +103,9 @@ def link_bbxes_between_frames(bbox_list, w_iou=1.0, w_scores=1.0, w_scores_mul=0
 def link_video_one_class(vid_det, bNMS3d = True, gtlen=None):
     '''
     在一个视频里, 把一个类别的box连起来, 形成tube
-    vid_det: 每帧的检测结果, [ [frame_index, [x1, y1, x2, y2, cls_score]] ]
+    vid_det: 每帧的检测结果, list[ [frame_index, np.array[[x1, y1, x2, y2, cls_score]] ] ]
     gtlen: the mean length of gt in training set
-    return a list of tube [ [frame_index, x1, y1, x2, y2, cls_score] ]
+    return: list[ np.array[[frame_index, x1, y1, x2, y2, cls_score]] ]
     '''
     # list of bbox information [[bbox in frame 1], [bbox in frame 2], ...]
     vdets = [vid_det[i][1] for i in range(len(vid_det))]
@@ -138,8 +138,8 @@ def summary_videos(pred_videos):
 
 def video_ap_one_class(gt, pred_videos, iou_thresh = 0.2, bTemporal = False, gtlen = None):
     '''
-    gt:          [ [video_index, [frame_index, x1, y1, x2, y2] ] ]
-    pred_videos: [ [video_index, [frame_index, [x1, y1, x2, y2, cls_score] ] ] ]
+    gt:          [[video_index, np.array[[frame_index, x1, y1, x2, y2]] ] ]
+    pred_videos: [[video_index, [[frame_index, np.array[[x1, y1, x2, y2, cls_score]] ]] ]]
         gt里, 每个视频多个帧, 每帧只有一个box;
         pred_videos里, 帧数和gt一样, 但每帧里有多个框. 需要从每帧里找一个框,串起来,形成一条路径,是动态路径规划的问题. 用维特比算法来解
     '''
@@ -229,8 +229,8 @@ def gt_to_videts(gt_v):
 def evaluate_videoAP(gt_videos, all_boxes, CLASSES, iou_thresh = 0.2, bTemporal = False, prior_length = None):
     '''
     gt_videos : {'video_name': {'gt_classes':1, 'tubes':[[frame_index, x1,y1,x2,y2]]} }
-    all_boxes: {"jpg_name": [[cls_1_data], [cls_1_data], ..., [cls_23_data]]}
-                cls_1_data格式: shape=(nbox, 5), 其中5 = 4(x1, y1, x2, y2) + 1(类别置信度)
+    all_boxes: {"jpg_name": { class: np.array[[x1, y1, x2, y2, cls_score]]} }
+                有24个类别的class
     '''
     def imagebox_to_videts(img_boxes, CLASSES):
         # image names
@@ -269,14 +269,15 @@ def evaluate_videoAP(gt_videos, all_boxes, CLASSES, iou_thresh = 0.2, bTemporal 
     """
         gt_videos : 910个视频的标注
         gt_videos_format : 所有的tubes, 有的视频里有多个tube, 所以len(gt_videos_format) > 910
-            [ [cls_id, video_index, [frame_index, x1, y1, x2, y2] ] ]
-              n个tubes                  
-                                    n个boxes
+             [ [cls, video_index, np.array[[frame_index, x1, y1, x2, y2]] ] ]
+               n个tubes                  
+                                  n个boxes
 
         pred_videos_format : 每个视频,24个类别的目标框, len=910*24
-            [ [cls_id, video_index, [frame_index, [x1, y1, x2, y2, cls_score]] ] ]
+            [ [cls_id, video_index, [[frame_index, np.array[[x1, y1, x2, y2, cls_score]] ]] ]
               910*24个目标框
                                     n个frame
+                                                   m个box
     """
     t0 = time.time()
     gt_videos_format = gt_to_videts(gt_videos)
